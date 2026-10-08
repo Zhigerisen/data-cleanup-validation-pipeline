@@ -29,12 +29,26 @@ SAMPLE = 200
 LOG_SAMPLE = 500
 
 
-def frame_to_values(df):
+def frame_to_values(df, numeric=()):
+    """Header + rows. Values stay literal (sent with RAW) so that a phone like
+    '+77755951212' is not swallowed as a formula; listed columns become real numbers."""
     df = df.fillna("")
-    return [list(df.columns)] + df.astype(object).values.tolist()
+    cols = list(df.columns)
+    rows = [cols]
+    for rec in df.astype(object).values.tolist():
+        row = []
+        for c, v in zip(cols, rec):
+            if c in numeric and v != "":
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    pass
+            row.append(v)
+        rows.append(row)
+    return rows
 
 
-def put(sh, title, values, rows=None, cols=None):
+def put(sh, title, values, rows=None, cols=None, vio="USER_ENTERED"):
     try:
         ws = sh.worksheet(title)
         ws.clear()
@@ -42,11 +56,27 @@ def put(sh, title, values, rows=None, cols=None):
         ws = sh.add_worksheet(title=title,
                               rows=rows or max(len(values) + 10, 50),
                               cols=cols or max(len(values[0]) + 2, 10))
-    ws.update(range_name="A1", values=values, value_input_option="USER_ENTERED")
+    ws.update(range_name="A1", values=values, value_input_option=vio)
     ws.freeze(rows=1)
     ws.format("1:1", {"textFormat": {"bold": True}})
     print("[OK] tab:", title, "rows:", len(values))
     return ws
+
+
+def finalize(sh):
+    """English locale (so amounts render as 1,234.56) + currency format on the USD column."""
+    sh.batch_update({"requests": [{"updateSpreadsheetProperties": {
+        "properties": {"locale": "en_US", "timeZone": "Etc/GMT"},
+        "fields": "locale,timeZone"}}]})
+    ws = sh.worksheet("AFTER (clean master)")
+    col = ws.row_values(1).index("total_spent_usd")
+    sh.batch_update({"requests": [{"repeatCell": {
+        "range": {"sheetId": ws.id, "startRowIndex": 1,
+                  "startColumnIndex": col, "endColumnIndex": col + 1},
+        "cell": {"userEnteredFormat": {"numberFormat": {"type": "CURRENCY",
+                                                        "pattern": "$#,##0.00"}}},
+        "fields": "userEnteredFormat.numberFormat"}}]})
+    print("[OK] locale en_US + currency format applied")
 
 
 def main(url):
@@ -100,17 +130,20 @@ def main(url):
     ids = master["record_id"].astype(int).head(SAMPLE).tolist()
     before = raw[raw["record_id"].astype(int).isin(ids)]
     after = master.head(SAMPLE)
-    put(sh, "BEFORE (messy input)", frame_to_values(before))
-    put(sh, "AFTER (clean master)", frame_to_values(after))
+    put(sh, "BEFORE (messy input)", frame_to_values(before), vio="RAW")
+    put(sh, "AFTER (clean master)",
+        frame_to_values(after, numeric=("total_spent_usd", "order_count")), vio="RAW")
 
     # ---- Quarantine (all) ----
     quar = pd.read_excel(os.path.join(OUT, "02_Quarantine.xlsx"), dtype=str)
-    put(sh, "Quarantine", frame_to_values(quar))
+    put(sh, "Quarantine", frame_to_values(quar), vio="RAW")
 
     # ---- Change log sample ----
     log = pd.read_csv(os.path.join(OUT, "03_Change_Log.csv"), dtype=str,
                       keep_default_na=False, nrows=LOG_SAMPLE)
-    put(sh, "Change log (sample)", frame_to_values(log))
+    put(sh, "Change log (sample)", frame_to_values(log), vio="RAW")
+
+    finalize(sh)
 
     for ws in sh.worksheets():
         if ws.title in ("Sheet1", "Лист1"):
