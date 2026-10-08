@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Internal research dumps (raw third-party job text) - never publish
+_research/
+
+# Secrets (defensive)
+*.env
+*credentials*
+*token*
+*.key
+*.pem
+.secrets*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Internal strategy / handoff docs (Russian, founder-only) - never publish
+plan.md
+case.md

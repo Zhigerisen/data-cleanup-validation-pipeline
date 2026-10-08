@@ -1,0 +1,94 @@
+# Data Cleanup & Validation Pipeline — declarative rules config.
+# Adding a rule = editing this file. No code change required.
+version: 1
+
+# Demo FX rates to USD (documented, for the single-currency master file).
+fx_to_usd:
+  USD: 1.0
+  GBP: 1.27
+  EUR: 1.08
+  KZT: 0.0021
+
+# Canonical aliases for categorical columns.
+country_aliases:
+  "US": ["us", "usa", "u.s.", "u.s.a.", "united states", "united states of america", "america"]
+  "GB": ["gb", "uk", "u.k.", "united kingdom", "great britain", "england"]
+  "DE": ["de", "germany", "deutschland", "ger"]
+  "FR": ["fr", "france", "fra"]
+  "KZ": ["kz", "kazakhstan", "kaz", "qazaqstan"]
+source_aliases:
+  "Facebook": ["fb", "facebook", "fb ads", "facebook ads", "meta"]
+  "Google": ["google", "google ads", "adwords", "ggl", "goog"]
+  "Organic": ["organic", "seo", "direct", "website"]
+  "Referral": ["referral", "ref", "word of mouth", "friend"]
+  "Email": ["email", "newsletter", "mailing"]
+
+# Per-column cleaning / transform / validation rules.
+# on_fail policy: a single bad field is nulled out (and logged), never drops the whole
+# record. Whole-row quarantine is decided separately (see `quarantine` below).
+columns:
+  name:
+    clean: [fix_mojibake, collapse_ws, strip]
+    transform: {type: split_name}        # -> first_name, last_name (handles "Last, First")
+  email:
+    clean: [fix_mojibake, strip, lower]
+    validate: {type: email}
+    on_fail: null_out
+  phone:
+    clean: [strip]
+    transform: {type: phone, region_col: country, format: E164}
+    validate: {type: phone_possible}
+    on_fail: null_out
+  company:
+    clean: [fix_mojibake, collapse_ws, strip, titlecase_smart]
+  address:
+    clean: [fix_mojibake, collapse_ws, strip, expand_address_abbr]
+  city:
+    clean: [fix_mojibake, collapse_ws, strip, titlecase_smart, ascii_fold]
+  country:
+    clean: [strip]
+    transform: {type: map_alias, dict: country_aliases}
+    validate: {type: isin, values: ["US", "GB", "DE", "FR", "KZ"]}
+    on_fail: null_out
+  postal_code:
+    clean: [strip, upper]
+  signup_date:
+    transform: {type: date, dayfirst_by: country}
+    validate: {type: date_range, min: "2015-01-01", max: "today"}
+    on_fail: null_out
+  last_order_date:
+    transform: {type: date, dayfirst_by: country}
+    validate: {type: date_range, min: "2015-01-01", max: "today"}
+    on_fail: null_out
+  order_count:
+    transform: {type: integer}
+    validate: {type: number_range, min: 0, max: 100000}
+    on_fail: null_out
+  total_spent:
+    transform: {type: currency, to_usd: true}
+    validate: {type: number_range, min: 0, max: 100000000}
+    on_fail: null_out
+  source:
+    clean: [strip, lower]
+    transform: {type: map_alias, dict: source_aliases}
+
+# Whole-row quarantine: a record is unusable if it has NO reliable identifier left
+# after cleaning (neither a valid email nor a usable phone) or no name at all.
+quarantine:
+  rule: no_usable_identifier
+
+# Fuzzy deduplication config.
+dedup:
+  # Multi-pass blocking: candidate pairs = union across these keys (recall-safe, O(n^2)-safe).
+  blocking_keys:
+    - "postal3_emailchar"      # postal_code[:3] + email[0]
+    - "lastname_city"          # last_name[:4] + city[:4]
+    - "phone_tail"             # last 7 digits of phone
+  compare:
+    name: token_sort
+    email: ratio
+    phone: ratio
+    address: token_set
+  weights: {name: 0.33, email: 0.34, phone: 0.18, address: 0.15}
+  threshold: 80
+  survivorship: most_complete_then_latest   # golden record selection

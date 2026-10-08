@@ -1,0 +1,58 @@
+{
+  "run_facts": {
+    "Input rows": 25000,
+    "Clean golden records": 19641,
+    "Duplicate rows merged": 4748,
+    "Duplicate rate %": 19.5,
+    "Quarantined rows": 611,
+    "Field changes logged": 103558,
+    "Dedup precision %": 99.9,
+    "Dedup recall %": 94.9,
+    "Quarantine false-drops": 0,
+    "Quarantine planted-recall %": 100.0,
+    "Runtime sec": 44.1
+  },
+  "dedup": {
+    "true_pairs": 5000,
+    "pred_pairs": 4749,
+    "tp": 4743,
+    "precision": 99.9,
+    "recall": 94.9
+  },
+  "quarantine": {
+    "planted": 380,
+    "caught": 380,
+    "planted_recall": 100.0,
+    "pred": 611,
+    "false_drops": 0,
+    "false_drop_rate": 0.0
+  },
+  "scorecard": {
+    "Completeness": {
+      "before": 97.5,
+      "after": 95.6
+    },
+    "Validity": {
+      "before": 95.8,
+      "after": 100.0
+    },
+    "Uniqueness": {
+      "before": 80.5,
+      "after": 100.0
+    },
+    "Consistency": {
+      "before": 14.5,
+      "after": 100.0
+    },
+    "Accuracy": {
+      "before": 85.2,
+      "after": 94.6
+    },
+    "Timeliness": {
+      "before": 88.8,
+      "after": 90.7
+    }
+  },
+  "overall_before": 77.0,
+  "overall_after": 96.8
+}

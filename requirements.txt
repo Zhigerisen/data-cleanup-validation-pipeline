@@ -1,0 +1,17 @@
+# Data Cleanup & Validation Pipeline - dependencies
+pandas>=2.0
+numpy
+openpyxl
+PyYAML
+rapidfuzz
+networkx
+pandera
+phonenumbers
+email-validator
+python-dateutil
+Babel
+charset-normalizer
+ftfy
+Unidecode
+Faker
+matplotlib
